@@ -3,41 +3,50 @@ import json
 import os
 import time
 
-# Ollama's default local server endpoint
-# OLLAMA_URL = "http://localhost:11434/api/generate"
-
-# def query_qwen(prompt, model="qwen2.5:0.5b"):
-#     """Send a prompt to the local Ollama service and get the model's response"""
-#     payload = {
-#         "model": model,
-#         "prompt": prompt,
-#         "stream": False,  # one answer for one question
-#         "options": {
-#             "num_predict": 512  # limit response, reduce cost
-#         }
-#     }
-#     try:
-#         response = requests.post(OLLAMA_URL, json=payload, timeout=60)
-#         response.raise_for_status()  # check status
-#         return response.json()["response"]
-#     except requests.exceptions.RequestException as e:
-#         return f"调用本地模型时出错: {e}"
-
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") # your-api-key-here
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Define routing rules: agent type -> OpenRouter model
-# Using "openrouter/free" for automatic free model selection
 MODEL_ROUTING = {
-    "coding":  {"model": "openrouter/free", "max_tokens": 1024},   # Programming expert
-    "academic": {"model": "openrouter/free", "max_tokens": 2048}, # Academic expert
-    "humanize": {"model": "openrouter/free", "max_tokens": 512}, # Text polishing expert
-    "general": {"model": "openrouter/free", "max_tokens": 768},  # General assistant
+    "coding":  {"model": "openrouter/free", "max_tokens": 1024},
+    "academic": {"model": "openrouter/free", "max_tokens": 2048},
+    "humanize": {"model": "openrouter/free", "max_tokens": 512},
+    "general": {"model": "openrouter/free", "max_tokens": 768},
 }
 
+def calculate_dynamic_max_tokens(prompt, base_max_tokens):
+    input_length = len(prompt.split())
+    if input_length < 20:
+        return min(base_max_tokens, 256)
+    elif input_length < 100:
+        return base_max_tokens
+    else:
+        return min(base_max_tokens * 2, 4096)
+
+def fallback_to_ollama(prompt):
+    """Fallback to local Ollama model if OpenRouter fails."""
+    local_model = "qwen2.5:0.5b"
+    payload = {
+        "model": local_model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"num_predict": 512}
+    }
+    try:
+        response = requests.post("http://localhost:11434/api/generate", json=payload, timeout=60)
+        if response.status_code == 200:
+            content = response.json()["response"]
+            return {"content": content, "model": local_model, "source": "ollama"}
+        else:
+            return {"content": "Local model call failed", "model": local_model, "source": "error"}
+    except Exception as e:
+        return {"content": f"Fallback call failed: {e}", "model": "none", "source": "error"}
+
 def query_router(prompt, agent_type="general", retries=2):
-    """Call different free models based on agent type via OpenRouter"""
-    model = MODEL_ROUTING.get(agent_type, MODEL_ROUTING["general"])
+    """Call OpenRouter, retry on failure, fallback to local Ollama if all fail"""
+    model_config = MODEL_ROUTING.get(agent_type, MODEL_ROUTING["general"])
+    model = model_config["model"]
+    max_tokens = calculate_dynamic_max_tokens(prompt, model_config["max_tokens"])
+
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json"
@@ -45,15 +54,24 @@ def query_router(prompt, agent_type="general", retries=2):
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 512,
+        "max_tokens": max_tokens,
     }
+
     for attempt in range(retries):
         try:
             response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=30)
-            print("DEBUG - Status Code:", response.status_code)
-            print("DEBUG - Raw Response:", response.text)  # print orignal response
-            return response.json()["choices"][0]["message"]["content"]
+            if response.status_code == 200:
+                content = response.json()["choices"][0]["message"]["content"]
+                return {"content": content, "model": model, "source": "openrouter"}
+            else:
+                # Status code is not 200, consider it a failure and continue retrying
+                print(f"OpenRouter returned status code {response.status_code}, retrying {attempt+1}/{retries}")
         except Exception as e:
-            if attempt == retries - 1:
-                return f"Model call failed: {e}"
-            time.sleep(1)  # wait before retrying
+            print(f"OpenRouter call exception: {e}, retrying {attempt+1}/{retries}")
+
+        if attempt < retries - 1:
+            time.sleep(1)  # Wait 1 second before retrying
+
+    # All retries failed, fallback to local
+    print("All OpenRouter retries failed, falling back to local Ollama")
+    return fallback_to_ollama(prompt)
