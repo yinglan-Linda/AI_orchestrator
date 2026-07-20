@@ -23,7 +23,7 @@ import time
 #     except requests.exceptions.RequestException as e:
 #         return f"调用本地模型时出错: {e}"
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") # your-api-key-here
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # Define routing rules: agent type -> OpenRouter model

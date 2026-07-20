@@ -11,6 +11,9 @@ This is a lightweight, local `AI Orchestrator` prototype built on top of Ollama.
 *   Python 3.10+
 *   [Ollama](https://ollama.com/) running locally with a model installed (e.g., `qwen2.5:0.5b`)
 
+## Configuration
+Create a `.env` file in the project root and add your OpenRouter API key:
+
 ## Quick Start
 1.  Clone this repository.
 2.  Install dependencies: `pip install requests`.
