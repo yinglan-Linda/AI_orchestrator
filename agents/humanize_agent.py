@@ -1,6 +1,6 @@
-from llm_client import query_qwen 
+from llm_client import query_router
 
-def humanize_agent(user_input):
+def humanize_agent(user_input, context=""):
     # Specialized prompt for humanize
     prompt = f"""
     You are an expert in text polishing and human-like translation.
@@ -12,6 +12,9 @@ def humanize_agent(user_input):
     - Use metaphors or analogies to explain abstract concepts.
     - Adjust the tone to match the content and user's needs.
 
+    Context:
+    {context if context else "No previous context."}
+
     User's input: {user_input}
     """
-    return query_qwen(prompt)
+    return query_router(prompt, agent_type="humanize")

@@ -2,9 +2,15 @@ import requests
 import json
 import os
 import time
+from pathlib import Path
+from dotenv import load_dotenv
+# load environment variables from .env file first
+load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 MODEL_ROUTING = {
     "coding":  {"model": "openrouter/free", "max_tokens": 1024},
@@ -32,7 +38,7 @@ def fallback_to_ollama(prompt):
         "options": {"num_predict": 512}
     }
     try:
-        response = requests.post("http://localhost:11434/api/generate", json=payload, timeout=60)
+        response = requests.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload, timeout=60)
         if response.status_code == 200:
             content = response.json()["response"]
             return {"content": content, "model": local_model, "source": "ollama"}

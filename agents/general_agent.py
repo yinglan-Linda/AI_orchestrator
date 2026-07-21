@@ -1,6 +1,6 @@
-from llm_client import query_qwen 
+from llm_client import query_router
 
-def general_agent(user_input):
+def general_agent(user_input, context=""):
     # General AI
     prompt = f"""
     You are a versatile and intelligent assistant capable of handling a variety of queries.
@@ -21,6 +21,9 @@ def general_agent(user_input):
     - Be clear, concise, friendly, and logical.
     - Before recommending an expert, briefly explain why and ask for the user's permission.
 
+    Context:
+    {context if context else "No previous context."}
+
     User's request: {user_input}
     """
-    return query_qwen(prompt)
+    return query_router(prompt, agent_type="general")
